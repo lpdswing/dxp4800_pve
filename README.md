@@ -51,3 +51,8 @@ dd if=/dev/mmcblk0boot1 of=/dev/mapper/pve-vm--100--disk--3
   选项-SMBIOS设置，只填uuid和串行（就是sn），**不要泄露sn**
 
 重启，OK。
+
+# pve中控制4800的6个灯
+
+参考这个仓库： https://github.com/miskcoo/ugreen_dx4600_leds_controller
+发现ssh会自动把端口给关闭参考矿神博客：  https://imnks.com/10101.html
