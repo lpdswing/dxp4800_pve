@@ -32,7 +32,7 @@ dd if=/dev/mmcblk0boot1 of=/dev/mapper/pve-vm--100--disk--3
         KERNELS=="6:0:0:0", SYMLINK+="mmcblk0"
         KERNELS=="7:0:0:0", SYMLINK+="mmcblk0boot0"
         KERNELS=="8:0:0:0", SYMLINK+="mmcblk0boot1"
-        KERNEL=="sd?[1-7]", SUBSYSTEMS=="scsi", ATTRS{scsi_level}=="6", SYMLINK+="mmcblk0p%n"
+        KERNELS=="6:0:0:0", KERNEL=="sd?[1-7]", SUBSYSTEMS=="scsi", ATTRS{scsi_level}=="6", SYMLINK+="mmcblk0p%n"
       ```
 
   - 执行命令： `udevadm control --reload-rules && udevadm trigger` 让规则生效
