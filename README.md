@@ -8,8 +8,10 @@ pve安装dxp4800虚拟机，解决在线更新系统问题
 dd if=/dev/mmcblk0boot0 of=/dev/mapper/pve-vm--100--disk--2
 dd if=/dev/mmcblk0boot1 of=/dev/mapper/pve-vm--100--disk--3
 ```
+![alt text](image-1.png)
+unraid磁盘分配参考, pve也类似
 # 创建虚拟磁盘的映射
-## 查看磁盘总线地址
+## 查看磁盘总线地址 (弃用)
    ```shell
      ssh进绿联虚拟机执行下面命令
      lsscsi
@@ -24,21 +26,66 @@ dd if=/dev/mmcblk0boot1 of=/dev/mapper/pve-vm--100--disk--3
    
    6:0:0:0就是sda磁盘的总线，每次重启sda，sdb可能都会变，要用固定不变的总线做条件映射
   ```
+## 查看磁盘文件描述符
+```shell
+$ lsblk
+vda                                      254:0    0    32G  0 disk  
+├─vda1                                   254:1    0   256M  0 part  /boot
+├─vda2                                   254:2    0     2G  0 part  /rom
+├─vda3                                   254:3    0    10M  0 part  /mnt/factory
+├─vda4                                   254:4    0     2G  0 part  
+├─vda5                                   254:5    0     2G  0 part  
+├─vda6                                   254:6    0     4G  0 part  /ugreen
+└─vda7                                   254:7    0  18.9G  0 part  /overlay
+vdb                                      254:16   0     4M  0 disk  
+vdc                                      254:32   0     4M  0 disk 
+```
 ## 创建udev规则，每次开机自动给磁盘一个SYMLINK
-  - 创建文件 /etc/udev/rules.d/10-rename-disks.rules
+
+  - 查询需要用到的信息
+    ```shell
+    # 说明: /dev/vda是我的系统安装盘, 虚拟磁盘总线我选择的virtio, 需要创建存储的磁盘选sata或者直通, 否则绿联系统识别不到
+    $ udevadm info --query=all --name=/dev/vda | grep DEVTYPE
+    E: DEVTYPE=disk
+    $ udevadm info --query=all --name=/dev/vda | grep ID_SERIAL
+    E: ID_SERIAL=vdisk1
+    .... 其他需要映射的磁盘自己一一对应 --name=/dev/vda1, --name=/dev/vda2..., --name=/dev/vdb, --name=/dev/vdc, 举一反三
+    ```
+  - 创建文件 ~~/etc/udev/rules.d/10-rename-disks.rules~~ /etc/udev/rules.d/999-rename-disks.rules, 名字的前缀数字尽量大
     用vim编辑器编辑这个文件，填入下面代码
   
       ```bash
+        # 这种写法弃用
         KERNELS=="6:0:0:0", SYMLINK+="mmcblk0"
         KERNELS=="7:0:0:0", SYMLINK+="mmcblk0boot0"
         KERNELS=="8:0:0:0", SYMLINK+="mmcblk0boot1"
         KERNELS=="6:0:0:0", KERNEL=="sd?[1-7]", SUBSYSTEMS=="scsi", ATTRS{scsi_level}=="6", SYMLINK+="mmcblk0p%n"
+
+        # 使用新的规则
+        SUBSYSTEM=="block", ENV{ID_SERIAL}=="vdisk1",ENV{DEVTYPE}=="disk", SYMLINK+="mmcblk0"
+        SUBSYSTEM=="block", ENV{ID_SERIAL}=="vdisk1",ENV{DEVTYPE}=="partition", SYMLINK+="mmcblk0p%n"
+        SUBSYSTEM=="block", ENV{ID_SERIAL}=="vdisk2",ENV{DEVTYPE}=="disk", SYMLINK+="mmcblk0boot0"
+        SUBSYSTEM=="block", ENV{ID_SERIAL}=="vdisk3",ENV{DEVTYPE}=="disk", SYMLINK+="mmcblk0boot1"
       ```
 
   - 执行命令： `udevadm control --reload-rules && udevadm trigger` 让规则生效
-  执行 `ls /dev/mmc*` 看一下
-  如果出现`/dev/mmcblk0  /dev/mmcblk0boot0  /dev/mmcblk0boot1  /dev/mmcblk0p1  /dev/mmcblk0p2  /dev/mmcblk0p3  /dev/mmcblk0p4  /dev/mmcblk0p5  /dev/mmcblk0p6  /dev/mmcblk0p7` 就成功了。
-
+  - `udevadm test /sys/block/vda` 查看规则执行情况
+  执行 `ls -l /dev/mmc*` 
+  ```shell
+    $ ls -l /dev/mmc*
+    lrwxrwxrwx 1 root root 3 Jul 19 11:24 /dev/mmcblk0 -> vda
+    lrwxrwxrwx 1 root root 3 Jul 19 11:24 /dev/mmcblk0boot0 -> vdb
+    lrwxrwxrwx 1 root root 3 Jul 19 11:24 /dev/mmcblk0boot1 -> vdc
+    lrwxrwxrwx 1 root root 4 Jul 19 11:24 /dev/mmcblk0p1 -> vda1
+    lrwxrwxrwx 1 root root 4 Jul 19 11:24 /dev/mmcblk0p2 -> vda2
+    lrwxrwxrwx 1 root root 4 Jul 19 11:24 /dev/mmcblk0p3 -> vda3
+    lrwxrwxrwx 1 root root 4 Jul 19 11:24 /dev/mmcblk0p4 -> vda4
+    lrwxrwxrwx 1 root root 4 Jul 19 11:24 /dev/mmcblk0p5 -> vda5
+    lrwxrwxrwx 1 root root 4 Jul 19 11:24 /dev/mmcblk0p6 -> vda6
+    lrwxrwxrwx 1 root root 4 Jul 19 11:24 /dev/mmcblk0p7 -> vda7
+  ```
+  完美
+  - `udevadm test /sys/block/vda` 查看规则执行情况(如果没生效)
 # pve设置BIOS的sn和uuid
 - 查询sn和uuid
   ssh进pve执行
